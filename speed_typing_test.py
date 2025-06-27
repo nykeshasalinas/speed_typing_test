@@ -25,12 +25,15 @@ class TypingTestApp:
         self.title_label = tk.Label(self.root, text="Typing Speed Test", font=("Arial", 20))
         self.title_label.pack(pady=10)
 
-        self.text_display = tk.Label(self.root, text="", wraplength=650, font=("Courier", 14), justify="left")
+        self.text_display = tk.Text(self.root, height=5, font=("Courier", 14), wrap="word")
         self.text_display.pack(pady=10)
+        self.text_display.config(state="disabled")
+        self.text_display.tag_config("correct", foreground="green")
+        self.text_display.tag_config("incorrect", foreground="red")
 
         self.input_entry = tk.Text(self.root, height=5, font=("Courier", 14), wrap="word")
         self.input_entry.pack(pady=10)
-        self.input_entry.bind("<KeyPress>", self.start_timer)
+        self.input_entry.bind("<KeyRelease>", self.on_key_release)
 
         self.wpm_label = tk.Label(self.root, text="WPM: 0", font=("Arial", 16))
         self.wpm_label.pack(pady=10)
@@ -40,28 +43,47 @@ class TypingTestApp:
 
     def load_new_text(self):
         self.text_to_type = self.text_loader.load_text()
-        self.text_display.config(text=self.text_to_type)
+        self.text_display.config(state="normal")
+        self.text_display.delete("1.0", tk.END)
+        self.text_display.insert("1.0", self.text_to_type)
+        self.text_display.config(state="disabled")
 
-    def start_timer(self, event):
-        if not self.timer_running:
+    def on_key_release(self, event=None):
+        typed = self.input_entry.get("1.0", tk.END).strip()
+        self.highlight_text(typed)
+
+        if not self.timer_running and typed:
             self.start_time = time.time()
             self.timer_running = True
             self.update_wpm()
 
+        if typed == self.text_to_type:
+            self.timer_running = False
+            wpm = self.calculator.calculate(typed, max(time.time() - self.start_time, 1))
+            self.wpm_label.config(text=f"WPM: {wpm}")
+            messagebox.showinfo("Done!", f"Great job! Your WPM is {wpm}.")
+
+    def highlight_text(self, typed):
+        self.text_display.config(state="normal")
+        self.text_display.delete("1.0", tk.END)
+        self.text_display.insert("1.0", self.text_to_type)
+
+        for i, char in enumerate(typed):
+            if i >= len(self.text_to_type):
+                break
+            tag = "correct" if char == self.text_to_type[i] else "incorrect"
+            self.text_display.tag_add(tag, f"1.{i}", f"1.{i+1}")
+
+        self.text_display.config(state="disabled")
+
     def update_wpm(self):
         if not self.timer_running:
             return
-
         time_elapsed = max(time.time() - self.start_time, 1)
-        typed_text = self.input_entry.get("1.0", tk.END).strip()
-        wpm = self.calculator.calculate(typed_text, time_elapsed)
+        typed = self.input_entry.get("1.0", tk.END).strip()
+        wpm = self.calculator.calculate(typed, time_elapsed)
         self.wpm_label.config(text=f"WPM: {wpm}")
-
-        if typed_text == self.text_to_type:
-            self.timer_running = False
-            messagebox.showinfo("Done!", f"Great job! Your WPM is {wpm}.")
-        else:
-            self.root.after(500, self.update_wpm)
+        self.root.after(500, self.update_wpm)
 
     def reset(self):
         self.timer_running = False
