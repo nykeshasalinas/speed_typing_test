@@ -1,89 +1,70 @@
-# Final Project:
-
-# Hanap kayo ng any existing python project na interesting para sa inyo. Gawin nyo yung project tapos pag gumagana na gawan nyo ng demo video.
-
-# Explain each of the 4 pillars of OOP, find sample code implementation in the project. If any of the pillar is  not used in the project you may just explain the concept.
-
-# - Send the link of your demo to my messenger before June 28.
-# - Upload the source code to your github account using gitbash.
-# - Add to the README the source of the project to give credit to the original creator.
-
-import curses
-from curses import wrapper
+import tkinter as tk
+from tkinter import messagebox
 import time
-import random
+from load_typing_test import TextLoader
+from calculate_wpm import WPMCalculator
 
-def start_screen(stdscr):
-	stdscr.clear()
-	stdscr.addstr("Welcome to the Speed Typing Test!")
-	stdscr.addstr("\nPress any key to begin!")
-	stdscr.refresh()
-	stdscr.getkey()
+class TypingTestApp:
+    def __init__(self, root):
+        self.root = root
+        self.text_loader = TextLoader()
+        self.calculator = WPMCalculator()
 
-def display_text(stdscr, target, current, wpm=0):
-	stdscr.addstr(target)
-	stdscr.addstr(1, 0, f"WPM: {wpm}")
+        self.text_to_type = ""
+        self.start_time = None
+        self.timer_running = False
 
-	for i, char in enumerate(current):
-		correct_char = target[i]
-		color = curses.color_pair(1)
-		if char != correct_char:
-			color = curses.color_pair(2)
+        self.setup_widgets()
+        self.load_new_text()
 
-		stdscr.addstr(0, i, char, color)
+    def setup_widgets(self):
+        self.root.title("Typing Speed Test")
+        self.root.geometry("700x400")
+        self.root.resizable(False, False)
 
-def load_text():
-	with open("typing_text.txt", "r") as f:
-		lines = f.readlines()
-		return random.choice(lines).strip()
+        self.title_label = tk.Label(self.root, text="Typing Speed Test", font=("Arial", 20))
+        self.title_label.pack(pady=10)
 
-def wpm_test(stdscr):
-	target_text = load_text()
-	current_text = []
-	wpm = 0
-	start_time = time.time()
-	stdscr.nodelay(True)
+        self.text_display = tk.Label(self.root, text="", wraplength=650, font=("Courier", 14), justify="left")
+        self.text_display.pack(pady=10)
 
-	while True:
-		time_elapsed = max(time.time() - start_time, 1)
-		wpm = round((len(current_text) / (time_elapsed / 60)) / 5)
+        self.input_entry = tk.Text(self.root, height=5, font=("Courier", 14), wrap="word")
+        self.input_entry.pack(pady=10)
+        self.input_entry.bind("<KeyPress>", self.start_timer)
 
-		stdscr.clear()
-		display_text(stdscr, target_text, current_text, wpm)
-		stdscr.refresh()
+        self.wpm_label = tk.Label(self.root, text="WPM: 0", font=("Arial", 16))
+        self.wpm_label.pack(pady=10)
 
-		if "".join(current_text) == target_text:
-			stdscr.nodelay(False)
-			break
+        self.restart_button = tk.Button(self.root, text="Try Again", command=self.reset)
+        self.restart_button.pack(pady=10)
 
-		try:
-			key = stdscr.getkey()
-		except:
-			continue
+    def load_new_text(self):
+        self.text_to_type = self.text_loader.load_text()
+        self.text_display.config(text=self.text_to_type)
 
-		if ord(key) == 27:
-			break
+    def start_timer(self, event):
+        if not self.timer_running:
+            self.start_time = time.time()
+            self.timer_running = True
+            self.update_wpm()
 
-		if key in ("KEY_BACKSPACE", '\b', "\x7f"):
-			if len(current_text) > 0:
-				current_text.pop()
-		elif len(current_text) < len(target_text):
-			current_text.append(key)
+    def update_wpm(self):
+        if not self.timer_running:
+            return
 
+        time_elapsed = max(time.time() - self.start_time, 1)
+        typed_text = self.input_entry.get("1.0", tk.END).strip()
+        wpm = self.calculator.calculate(typed_text, time_elapsed)
+        self.wpm_label.config(text=f"WPM: {wpm}")
 
-def main(stdscr):
-	curses.init_pair(1, curses.COLOR_GREEN, curses.COLOR_BLACK)
-	curses.init_pair(2, curses.COLOR_RED, curses.COLOR_BLACK)
-	curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)
+        if typed_text == self.text_to_type:
+            self.timer_running = False
+            messagebox.showinfo("Done!", f"Great job! Your WPM is {wpm}.")
+        else:
+            self.root.after(500, self.update_wpm)
 
-	start_screen(stdscr)
-	while True:
-		wpm_test(stdscr)
-		stdscr.addstr(2, 0, "You completed the text! Press any key to continue onto the next test.")
-		stdscr.addstr(3, 0, "Press ESC to exit.")
-		key = stdscr.getkey()
-		
-		if ord(key) == 27:
-			break
-
-wrapper(main)
+    def reset(self):
+        self.timer_running = False
+        self.input_entry.delete("1.0", tk.END)
+        self.wpm_label.config(text="WPM: 0")
+        self.load_new_text()
